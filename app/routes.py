@@ -2,7 +2,7 @@ from flask import Blueprint, render_template, request, flash, redirect, url_for,
 from flask_login import login_required, current_user
 from werkzeug.utils import secure_filename
 import os
-from app.face_utils import process_image, save_face_encoding, find_matching_face, allowed_file, process_frame
+from app.face_utils import process_image, save_face_encoding, find_matching_face, allowed_file, process_frame, check_face_exists
 import cv2
 import base64
 import re
@@ -55,6 +55,17 @@ def register_face():
                 os.remove(filepath)
                 return jsonify({'success': False, 'message': 'Multiple faces detected. Please upload an image with a single face'})
             elif encoding is not None:
+                # Check if face already exists
+                exists, existing_label, existing_user = check_face_exists(encoding)
+                if exists:
+                    os.remove(filepath)
+                    message = f'This face is already registered as "{existing_label}"'
+                    if source == 'webcam':
+                        return jsonify({'success': False, 'message': message})
+                    flash(message, 'warning')
+                    return redirect(url_for('main.register_face'))
+                
+                # Face is new, save it
                 save_face_encoding(str(current_user.id), label, filename, encoding)
                 if source == 'webcam':
                     return jsonify({'success': True, 'message': 'Face registered successfully!'})
