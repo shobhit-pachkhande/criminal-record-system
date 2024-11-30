@@ -5,6 +5,7 @@ import os
 from app import db
 from bson.binary import Binary
 import pickle
+import cv2
 
 def process_image(image_path):
     """Process an image and return face encodings"""
@@ -53,3 +54,32 @@ def allowed_file(filename):
     """Check if the file extension is allowed"""
     ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'}
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+def process_frame(frame):
+    """Process a video frame and return it with face recognition results"""
+    # Convert the image from BGR color (OpenCV) to RGB color
+    rgb_frame = frame[:, :, ::-1]
+    
+    # Find all face locations in the frame
+    face_locations = face_recognition.face_locations(rgb_frame)
+    face_encodings = face_recognition.face_encodings(rgb_frame, face_locations)
+    
+    # Draw results on the frame
+    for (top, right, bottom, left), face_encoding in zip(face_locations, face_encodings):
+        # Try to match the face
+        label, _ = find_matching_face(face_encoding)
+        
+        # Draw a rectangle around the face
+        cv2.rectangle(frame, (left, top), (right, bottom), (0, 255, 0), 2)
+        
+        # Draw the name below the face
+        if label:
+            cv2.rectangle(frame, (left, bottom - 35), (right, bottom), (0, 255, 0), cv2.FILLED)
+            cv2.putText(frame, label, (left + 6, bottom - 6), 
+                        cv2.FONT_HERSHEY_DUPLEX, 0.6, (255, 255, 255), 1)
+        else:
+            cv2.rectangle(frame, (left, bottom - 35), (right, bottom), (0, 0, 255), cv2.FILLED)
+            cv2.putText(frame, 'Unknown', (left + 6, bottom - 6),
+                        cv2.FONT_HERSHEY_DUPLEX, 0.6, (255, 255, 255), 1)
+    
+    return frame

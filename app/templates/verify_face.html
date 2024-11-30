@@ -10,18 +10,168 @@
                 <h2 class="text-center mb-0">Verify a Face</h2>
             </div>
             <div class="card-body">
-                <form method="POST" enctype="multipart/form-data">
-                    <div class="mb-3">
-                        <label for="file" class="form-label">Upload Face Image</label>
-                        <input type="file" class="form-control" id="file" name="file" accept="image/*" required>
-                        <div class="form-text">Upload an image to check against registered faces</div>
+                <ul class="nav nav-tabs mb-3" id="verifyTab" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="upload-tab" data-bs-toggle="tab" data-bs-target="#upload" type="button" role="tab">Upload Image</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="capture-tab" data-bs-toggle="tab" data-bs-target="#capture" type="button" role="tab">Capture from Webcam</button>
+                    </li>
+                </ul>
+
+                <div class="tab-content" id="verifyTabContent">
+                    <!-- Upload Image Tab -->
+                    <div class="tab-pane fade show active" id="upload" role="tabpanel">
+                        <form method="POST" enctype="multipart/form-data">
+                            <div class="mb-3">
+                                <label for="file" class="form-label">Upload Face Image</label>
+                                <input type="file" class="form-control" id="file" name="file" accept="image/*" required>
+                                <div class="form-text">Upload an image to check against registered faces</div>
+                            </div>
+                            <div class="text-center">
+                                <button type="submit" class="btn btn-primary">Verify Face</button>
+                            </div>
+                        </form>
                     </div>
-                    <div class="text-center">
-                        <button type="submit" class="btn btn-primary">Verify Face</button>
+
+                    <!-- Capture from Webcam Tab -->
+                    <div class="tab-pane fade" id="capture" role="tabpanel">
+                        <div class="text-center mb-3">
+                            <video id="webcam" class="img-fluid" autoplay playsinline></video>
+                            <canvas id="canvas" style="display: none;"></canvas>
+                        </div>
+                        <div class="text-center mb-3">
+                            <button id="startCamera" class="btn btn-secondary">Start Camera</button>
+                            <button id="captureImage" class="btn btn-primary" disabled>Capture Image</button>
+                            <button id="retakeImage" class="btn btn-warning" style="display: none;">Retake</button>
+                            <button id="verifyCapture" class="btn btn-success" style="display: none;">Verify Face</button>
+                        </div>
+                        <div id="preview" class="text-center" style="display: none;">
+                            <img id="capturedImage" class="img-fluid mb-3">
+                        </div>
+                        <div id="result" class="alert" style="display: none;"></div>
                     </div>
-                </form>
+                </div>
             </div>
         </div>
     </div>
 </div>
+
+{% block scripts %}
+<script>
+let stream = null;
+const video = document.getElementById('webcam');
+const canvas = document.getElementById('canvas');
+const startButton = document.getElementById('startCamera');
+const captureButton = document.getElementById('captureImage');
+const retakeButton = document.getElementById('retakeImage');
+const verifyButton = document.getElementById('verifyCapture');
+const preview = document.getElementById('preview');
+const capturedImage = document.getElementById('capturedImage');
+const resultDiv = document.getElementById('result');
+
+// Start camera when switching to capture tab
+document.getElementById('capture-tab').addEventListener('click', () => {
+    if (!stream) {
+        startCamera();
+    }
+});
+
+// Stop camera when switching to upload tab
+document.getElementById('upload-tab').addEventListener('click', () => {
+    stopCamera();
+});
+
+startButton.addEventListener('click', startCamera);
+captureButton.addEventListener('click', captureImage);
+retakeButton.addEventListener('click', retakeImage);
+verifyButton.addEventListener('click', verifyCapturedImage);
+
+async function startCamera() {
+    try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        video.srcObject = stream;
+        startButton.style.display = 'none';
+        captureButton.disabled = false;
+        preview.style.display = 'none';
+        video.style.display = 'block';
+        retakeButton.style.display = 'none';
+        verifyButton.style.display = 'none';
+        resultDiv.style.display = 'none';
+    } catch (err) {
+        console.error('Error accessing camera:', err);
+        alert('Error accessing camera. Please make sure you have granted camera permissions.');
+    }
+}
+
+function stopCamera() {
+    if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+        stream = null;
+        video.srcObject = null;
+    }
+    startButton.style.display = 'inline-block';
+    captureButton.disabled = true;
+}
+
+function captureImage() {
+    const context = canvas.getContext('2d');
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+    
+    capturedImage.src = canvas.toDataURL('image/jpeg');
+    video.style.display = 'none';
+    preview.style.display = 'block';
+    captureButton.style.display = 'none';
+    retakeButton.style.display = 'inline-block';
+    verifyButton.style.display = 'inline-block';
+    resultDiv.style.display = 'none';
+}
+
+function retakeImage() {
+    video.style.display = 'block';
+    preview.style.display = 'none';
+    captureButton.style.display = 'inline-block';
+    retakeButton.style.display = 'none';
+    verifyButton.style.display = 'none';
+    resultDiv.style.display = 'none';
+}
+
+function verifyCapturedImage() {
+    // Convert canvas content to blob
+    canvas.toBlob((blob) => {
+        const formData = new FormData();
+        formData.append('file', blob, 'capture.jpg');
+        formData.append('source', 'webcam');
+
+        // Send to server
+        fetch('{{ url_for("main.verify_face") }}', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            resultDiv.style.display = 'block';
+            if (data.match) {
+                resultDiv.className = 'alert alert-success';
+                resultDiv.textContent = `Match found! This is ${data.label}`;
+            } else {
+                resultDiv.className = 'alert alert-info';
+                resultDiv.textContent = 'No matching face found';
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            resultDiv.style.display = 'block';
+            resultDiv.className = 'alert alert-danger';
+            resultDiv.textContent = 'Error verifying face';
+        });
+    }, 'image/jpeg', 0.9);
+}
+
+// Clean up camera when leaving page
+window.addEventListener('beforeunload', stopCamera);
+</script>
+{% endblock %}
 {% endblock %}

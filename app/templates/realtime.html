@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+
+{% block title %}Real-time Recognition{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h2 class="text-center mb-0">Real-time Face Recognition</h2>
+            </div>
+            <div class="card-body">
+                <div class="text-center">
+                    <img src="{{ url_for('main.video_feed') }}" class="img-fluid">
+                </div>
+                <div class="text-center mt-3">
+                    <button id="stopCamera" class="btn btn-danger">Stop Camera</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.getElementById('stopCamera').addEventListener('click', function() {
+    fetch('{{ url_for("main.stop_camera") }}')
+        .then(() => window.location.href = '{{ url_for("main.home") }}');
+});
+
+// Stop the camera when leaving the page
+window.addEventListener('beforeunload', function() {
+    fetch('{{ url_for("main.stop_camera") }}');
+});
+</script>
+{% endblock %}

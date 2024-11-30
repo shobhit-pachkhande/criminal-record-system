@@ -1,10 +1,18 @@
-from flask import Blueprint, render_template, request, flash, redirect, url_for, current_app
+from flask import Blueprint, render_template, request, flash, redirect, url_for, current_app, Response, jsonify
 from flask_login import login_required, current_user
 from werkzeug.utils import secure_filename
 import os
-from app.face_utils import process_image, save_face_encoding, find_matching_face, allowed_file
+from app.face_utils import process_image, save_face_encoding, find_matching_face, allowed_file, process_frame
+import cv2
+import base64
+import re
+from PIL import Image
+import io
 
 main = Blueprint('main', __name__)
+
+# Global variable for camera
+camera = None
 
 @main.route('/')
 def home():
@@ -15,40 +23,48 @@ def home():
 def register_face():
     if request.method == 'POST':
         if 'file' not in request.files:
-            flash('No file uploaded', 'danger')
-            return redirect(request.url)
+            return jsonify({'success': False, 'message': 'No file uploaded'})
             
         file = request.files['file']
         label = request.form.get('label')
+        source = request.form.get('source', 'upload')  # 'upload' or 'webcam'
         
         if file.filename == '':
-            flash('No file selected', 'danger')
-            return redirect(request.url)
+            return jsonify({'success': False, 'message': 'No file selected'})
             
         if not label:
-            flash('Please provide a label', 'danger')
-            return redirect(request.url)
+            return jsonify({'success': False, 'message': 'Please provide a label'})
             
-        if file and allowed_file(file.filename):
-            filename = secure_filename(file.filename)
+        if file and (allowed_file(file.filename) or source == 'webcam'):
+            # Save the file
+            if source == 'webcam':
+                filename = f'webcam_{label}_{current_user.id}.jpg'
+            else:
+                filename = secure_filename(file.filename)
+                
             filepath = os.path.join(current_app.config['UPLOAD_FOLDER'], filename)
             file.save(filepath)
             
+            # Process the image
             encoding, face_count = process_image(filepath)
             
             if face_count == 0:
-                flash('No face detected in the image', 'danger')
+                os.remove(filepath)
+                return jsonify({'success': False, 'message': 'No face detected in the image'})
             elif face_count > 1:
-                flash('Multiple faces detected. Please upload an image with a single face', 'danger')
+                os.remove(filepath)
+                return jsonify({'success': False, 'message': 'Multiple faces detected. Please upload an image with a single face'})
             elif encoding is not None:
                 save_face_encoding(str(current_user.id), label, filename, encoding)
+                if source == 'webcam':
+                    return jsonify({'success': True, 'message': 'Face registered successfully!'})
                 flash('Face registered successfully!', 'success')
                 return redirect(url_for('main.home'))
                 
-            os.remove(filepath)  # Clean up the uploaded file
+            os.remove(filepath)
             
         else:
-            flash('Invalid file type', 'danger')
+            return jsonify({'success': False, 'message': 'Invalid file type'})
             
     return render_template('register_face.html')
 
@@ -57,36 +73,84 @@ def register_face():
 def verify_face():
     if request.method == 'POST':
         if 'file' not in request.files:
-            flash('No file uploaded', 'danger')
-            return redirect(request.url)
+            return jsonify({'success': False, 'message': 'No file uploaded'})
             
         file = request.files['file']
+        source = request.form.get('source', 'upload')  # 'upload' or 'webcam'
         
         if file.filename == '':
-            flash('No file selected', 'danger')
-            return redirect(request.url)
+            return jsonify({'success': False, 'message': 'No file selected'})
             
-        if file and allowed_file(file.filename):
-            filename = secure_filename(file.filename)
+        if file and (allowed_file(file.filename) or source == 'webcam'):
+            if source == 'webcam':
+                filename = f'verify_webcam_{current_user.id}.jpg'
+            else:
+                filename = secure_filename(file.filename)
+                
             filepath = os.path.join(current_app.config['UPLOAD_FOLDER'], filename)
             file.save(filepath)
             
             encoding, face_count = process_image(filepath)
             
             if face_count == 0:
-                flash('No face detected in the image', 'danger')
+                os.remove(filepath)
+                return jsonify({'success': False, 'message': 'No face detected in the image'})
             elif face_count > 1:
-                flash('Multiple faces detected. Please upload an image with a single face', 'danger')
+                os.remove(filepath)
+                return jsonify({'success': False, 'message': 'Multiple faces detected. Please upload an image with a single face'})
             elif encoding is not None:
                 label, user_id = find_matching_face(encoding)
+                os.remove(filepath)
+                
+                if source == 'webcam':
+                    return jsonify({'match': bool(label), 'label': label if label else None})
+                    
                 if label:
                     flash(f'Match found! This is {label}', 'success')
                 else:
                     flash('No matching face found', 'info')
-                    
-            os.remove(filepath)  # Clean up the uploaded file
+                return redirect(url_for('main.verify_face'))
+                
+            os.remove(filepath)
             
         else:
-            flash('Invalid file type', 'danger')
+            return jsonify({'success': False, 'message': 'Invalid file type'})
             
     return render_template('verify_face.html')
+
+def gen_frames():
+    global camera
+    if camera is None:
+        camera = cv2.VideoCapture(0)
+    
+    while True:
+        success, frame = camera.read()
+        if not success:
+            break
+        else:
+            # Process frame for face recognition
+            processed_frame = process_frame(frame)
+            ret, buffer = cv2.imencode('.jpg', processed_frame)
+            frame = buffer.tobytes()
+            yield (b'--frame\r\n'
+                   b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
+
+@main.route('/video_feed')
+@login_required
+def video_feed():
+    return Response(gen_frames(),
+                    mimetype='multipart/x-mixed-replace; boundary=frame')
+
+@main.route('/realtime-recognition')
+@login_required
+def realtime_recognition():
+    return render_template('realtime.html')
+
+@main.route('/stop_camera')
+@login_required
+def stop_camera():
+    global camera
+    if camera is not None:
+        camera.release()
+        camera = None
+    return '', 204

@@ -10,23 +10,176 @@
                 <h2 class="text-center mb-0">Register a New Face</h2>
             </div>
             <div class="card-body">
-                <form method="POST" enctype="multipart/form-data">
-                    <div class="mb-3">
-                        <label for="label" class="form-label">Name/Label</label>
-                        <input type="text" class="form-control" id="label" name="label" required>
-                        <div class="form-text">Enter a name or label for this face</div>
+                <ul class="nav nav-tabs mb-3" id="registerTab" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="upload-tab" data-bs-toggle="tab" data-bs-target="#upload" type="button" role="tab">Upload Image</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="capture-tab" data-bs-toggle="tab" data-bs-target="#capture" type="button" role="tab">Capture from Webcam</button>
+                    </li>
+                </ul>
+
+                <div class="tab-content" id="registerTabContent">
+                    <!-- Upload Image Tab -->
+                    <div class="tab-pane fade show active" id="upload" role="tabpanel">
+                        <form method="POST" enctype="multipart/form-data">
+                            <div class="mb-3">
+                                <label for="label" class="form-label">Name/Label</label>
+                                <input type="text" class="form-control" id="label" name="label" required>
+                                <div class="form-text">Enter a name or label for this face</div>
+                            </div>
+                            <div class="mb-3">
+                                <label for="file" class="form-label">Face Image</label>
+                                <input type="file" class="form-control" id="file" name="file" accept="image/*" required>
+                                <div class="form-text">Upload an image containing a single face</div>
+                            </div>
+                            <div class="text-center">
+                                <button type="submit" class="btn btn-primary">Register Face</button>
+                            </div>
+                        </form>
                     </div>
-                    <div class="mb-3">
-                        <label for="file" class="form-label">Face Image</label>
-                        <input type="file" class="form-control" id="file" name="file" accept="image/*" required>
-                        <div class="form-text">Upload an image containing a single face</div>
+
+                    <!-- Capture from Webcam Tab -->
+                    <div class="tab-pane fade" id="capture" role="tabpanel">
+                        <div class="mb-3">
+                            <label for="webcam-label" class="form-label">Name/Label</label>
+                            <input type="text" class="form-control" id="webcam-label" required>
+                            <div class="form-text">Enter a name or label for this face</div>
+                        </div>
+                        <div class="text-center mb-3">
+                            <video id="webcam" class="img-fluid" autoplay playsinline></video>
+                            <canvas id="canvas" style="display: none;"></canvas>
+                        </div>
+                        <div class="text-center mb-3">
+                            <button id="startCamera" class="btn btn-secondary">Start Camera</button>
+                            <button id="captureImage" class="btn btn-primary" disabled>Capture Image</button>
+                            <button id="retakeImage" class="btn btn-warning" style="display: none;">Retake</button>
+                            <button id="registerCapture" class="btn btn-success" style="display: none;">Register Face</button>
+                        </div>
+                        <div id="preview" class="text-center" style="display: none;">
+                            <img id="capturedImage" class="img-fluid mb-3">
+                        </div>
                     </div>
-                    <div class="text-center">
-                        <button type="submit" class="btn btn-primary">Register Face</button>
-                    </div>
-                </form>
+                </div>
             </div>
         </div>
     </div>
 </div>
+
+{% block scripts %}
+<script>
+let stream = null;
+const video = document.getElementById('webcam');
+const canvas = document.getElementById('canvas');
+const startButton = document.getElementById('startCamera');
+const captureButton = document.getElementById('captureImage');
+const retakeButton = document.getElementById('retakeImage');
+const registerButton = document.getElementById('registerCapture');
+const preview = document.getElementById('preview');
+const capturedImage = document.getElementById('capturedImage');
+
+// Start camera when switching to capture tab
+document.getElementById('capture-tab').addEventListener('click', () => {
+    if (!stream) {
+        startCamera();
+    }
+});
+
+// Stop camera when switching to upload tab
+document.getElementById('upload-tab').addEventListener('click', () => {
+    stopCamera();
+});
+
+startButton.addEventListener('click', startCamera);
+captureButton.addEventListener('click', captureImage);
+retakeButton.addEventListener('click', retakeImage);
+registerButton.addEventListener('click', registerCapturedImage);
+
+async function startCamera() {
+    try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        video.srcObject = stream;
+        startButton.style.display = 'none';
+        captureButton.disabled = false;
+        preview.style.display = 'none';
+        video.style.display = 'block';
+        retakeButton.style.display = 'none';
+        registerButton.style.display = 'none';
+    } catch (err) {
+        console.error('Error accessing camera:', err);
+        alert('Error accessing camera. Please make sure you have granted camera permissions.');
+    }
+}
+
+function stopCamera() {
+    if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+        stream = null;
+        video.srcObject = null;
+    }
+    startButton.style.display = 'inline-block';
+    captureButton.disabled = true;
+}
+
+function captureImage() {
+    const context = canvas.getContext('2d');
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+    
+    capturedImage.src = canvas.toDataURL('image/jpeg');
+    video.style.display = 'none';
+    preview.style.display = 'block';
+    captureButton.style.display = 'none';
+    retakeButton.style.display = 'inline-block';
+    registerButton.style.display = 'inline-block';
+}
+
+function retakeImage() {
+    video.style.display = 'block';
+    preview.style.display = 'none';
+    captureButton.style.display = 'inline-block';
+    retakeButton.style.display = 'none';
+    registerButton.style.display = 'none';
+}
+
+function registerCapturedImage() {
+    const label = document.getElementById('webcam-label').value.trim();
+    if (!label) {
+        alert('Please enter a name/label for the face');
+        return;
+    }
+
+    // Convert canvas content to blob
+    canvas.toBlob((blob) => {
+        const formData = new FormData();
+        formData.append('file', blob, 'capture.jpg');
+        formData.append('label', label);
+        formData.append('source', 'webcam');
+
+        // Send to server
+        fetch('{{ url_for("main.register_face") }}', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('Face registered successfully!');
+                window.location.href = '{{ url_for("main.home") }}';
+            } else {
+                alert(data.message || 'Error registering face');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error registering face');
+        });
+    }, 'image/jpeg', 0.9);
+}
+
+// Clean up camera when leaving page
+window.addEventListener('beforeunload', stopCamera);
+</script>
+{% endblock %}
 {% endblock %}
