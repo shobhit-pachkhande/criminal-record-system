@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+
+{% block title %}Home{% endblock %}
+
+{% block content %}
+<div class="text-center">
+    <h1 class="mb-4">Welcome to Face Recognition App</h1>
+    
+    {% if current_user.is_authenticated %}
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="card mb-3">
+                <div class="card-body">
+                    <h5 class="card-title">Register a Face</h5>
+                    <p class="card-text">Add a new face to the recognition system.</p>
+                    <a href="{{ url_for('main.register_face') }}" class="btn btn-primary">Register Face</a>
+                </div>
+            </div>
+            
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Verify a Face</h5>
+                    <p class="card-text">Check if a face matches any registered faces.</p>
+                    <a href="{{ url_for('main.verify_face') }}" class="btn btn-success">Verify Face</a>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <p class="lead">Please login or register to use the face recognition system.</p>
+    <div>
+        <a href="{{ url_for('auth.login') }}" class="btn btn-primary me-2">Login</a>
+        <a href="{{ url_for('auth.register') }}" class="btn btn-success">Register</a>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

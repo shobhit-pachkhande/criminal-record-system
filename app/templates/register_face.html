@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+
+{% block title %}Register Face{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h2 class="text-center mb-0">Register a New Face</h2>
+            </div>
+            <div class="card-body">
+                <form method="POST" enctype="multipart/form-data">
+                    <div class="mb-3">
+                        <label for="label" class="form-label">Name/Label</label>
+                        <input type="text" class="form-control" id="label" name="label" required>
+                        <div class="form-text">Enter a name or label for this face</div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="file" class="form-label">Face Image</label>
+                        <input type="file" class="form-control" id="file" name="file" accept="image/*" required>
+                        <div class="form-text">Upload an image containing a single face</div>
+                    </div>
+                    <div class="text-center">
+                        <button type="submit" class="btn btn-primary">Register Face</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
