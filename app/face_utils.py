@@ -25,20 +25,24 @@ def process_image(image_path):
         return face_encodings[0], 1
     return None, 0
 
-def save_face_encoding(user_id, label, image_path, encoding):
+def save_face_encoding(user_id, label, image_path, encoding , crime, address, date, gender):
     """Save face encoding to MongoDB"""
     encoding_binary = Binary(pickle.dumps(encoding))
     
     face_data = {
         'user_id': user_id,
         'label': label,
+        'crime-type': crime,
+        'Address': address,
+        'crime-date': date,
+        'gender': gender,
         'image_path': image_path,
         'encoding': encoding_binary
     }
     
     db.face_encodings.insert_one(face_data)
 
-def check_face_exists(encoding, tolerance=0.6):
+def check_face_exists(encoding, tolerance=0.7):
     """
     Check if a face already exists in the database
     Returns (exists, label, user_id) tuple
@@ -48,14 +52,14 @@ def check_face_exists(encoding, tolerance=0.6):
     for face in all_faces:
         stored_encoding = pickle.loads(face['encoding'])
         if face_recognition.compare_faces([stored_encoding], encoding, tolerance=tolerance)[0]:
-            return True, face['label'], face['user_id']
+            return True, face['label'], face['user_id'], face['crime-type'], face['Address'], face['crime-date'], face['gender'],face['image_path']
     
-    return False, None, None
+    return False, None, None, None, None, None, None,None
 
 def find_matching_face(encoding):
     """Find matching face in the database"""
-    exists, label, user_id = check_face_exists(encoding)
-    return (label, user_id) if exists else (None, None)
+    exists, label, user_id, crime, address, date, gender, image_url = check_face_exists(encoding)
+    return (label, user_id, crime, address, date, gender,image_url) if exists else (None, None, None, None, None, None,None)
 
 def allowed_file(filename):
     """Check if the file extension is allowed"""

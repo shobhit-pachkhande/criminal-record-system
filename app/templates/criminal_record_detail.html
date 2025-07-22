@@ -1,0 +1,35 @@
+{% extends 'base.html' %}
+
+ {% block content %}
+    <div class="container mt-4" style="display: flex; align-items: center; justify-content: center; flex-direction: column;">
+    {% if face_details %}
+        <div class="card" style="width: 30rem; border: 2px solid rgb(22, 176, 215);">
+            
+            <div class="card-header" style="background-color: rgb(195, 243, 123); text-align: center;">
+                Criminal Details 
+            </div>
+            <div class="details" style="display: flex; flex-direction: row; padding: 20px; gap: 20px;">
+               <div class="image" style="text-align: center;margin-top: 10px; ">
+                   <h6>Uploaded Image:</h6>
+                   <img src="{{ face_details.image_url }}" alt="Matched Image" class="img-fluid" style="max-width: 300px;">
+               </div>   
+               <div>
+                <ul class="list-group list-group-flush">
+                    <li class="list-group-item"><strong>Label:</strong> {{ face_details.label }}</li>
+                    <li class="list-group-item"><strong>Crime Type:</strong> {{ face_details.crime }}</li>
+                    <li class="list-group-item"><strong>Address:</strong> {{ face_details.address }}</li>
+                    <li class="list-group-item"><strong>Crime Date:</strong> {{ face_details.date }}</li>
+                    <li class="list-group-item"><strong>Gender:</strong> {{ face_details.gender }}</li>
+                </ul>
+               </div>
+
+            </div>           
+        </div>
+    
+    {% else %}
+    <p>No matching face found. Please try again.</p>
+    {% endif %}
+        
+        <a href="{{ url_for('main.verify_face') }}" class="btn btn-secondary mt-4">Back to Verification</a>
+    </div>
+{% endblock %}

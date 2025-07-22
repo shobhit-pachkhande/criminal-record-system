@@ -2,12 +2,14 @@ from flask import Blueprint, render_template, request, flash, redirect, url_for,
 from flask_login import login_required, current_user
 from werkzeug.utils import secure_filename
 import os
+from app import db
 from app.face_utils import process_image, save_face_encoding, find_matching_face, allowed_file, process_frame, check_face_exists
 import cv2
 import base64
 import re
 from PIL import Image
 import io
+from flask import session
 
 main = Blueprint('main', __name__)
 
@@ -27,6 +29,10 @@ def register_face():
             
         file = request.files['file']
         label = request.form.get('label')
+        crime = request.form.get('crime')  # Criminal record (optional, but should be included)
+        address = request.form.get('address')  # Address (optional)
+        date = request.form.get('date')  # Date of birth (optional)
+        gender = request.form.get('gender')
         source = request.form.get('source', 'upload')  # 'upload' or 'webcam'
         
         if file.filename == '':
@@ -56,7 +62,7 @@ def register_face():
                 return jsonify({'success': False, 'message': 'Multiple faces detected. Please upload an image with a single face'})
             elif encoding is not None:
                 # Check if face already exists
-                exists, existing_label, existing_user = check_face_exists(encoding)
+                exists, existing_label, existing_user, _ , _ , _ , _ , _ , = check_face_exists(encoding)
                 if exists:
                     os.remove(filepath)
                     message = f'This face is already registered as "{existing_label}"'
@@ -66,7 +72,7 @@ def register_face():
                     return redirect(url_for('main.register_face'))
                 
                 # Face is new, save it
-                save_face_encoding(str(current_user.id), label, filename, encoding)
+                save_face_encoding(str(current_user.id), label, filename, encoding , crime, address, date, gender)
                 if source == 'webcam':
                     return jsonify({'success': True, 'message': 'Face registered successfully!'})
                 flash('Face registered successfully!', 'success')
@@ -110,14 +116,36 @@ def verify_face():
                 os.remove(filepath)
                 return jsonify({'success': False, 'message': 'Multiple faces detected. Please upload an image with a single face'})
             elif encoding is not None:
-                label, user_id = find_matching_face(encoding)
+                label, user_id, crime, address, date, gender ,image_url = find_matching_face(encoding)
                 os.remove(filepath)
                 
                 if source == 'webcam':
-                    return jsonify({'match': bool(label), 'label': label if label else None})
+                    # return jsonify({'match': bool(label), 'label': label if label else None})
+                    return jsonify({
+                        'match': bool(label),
+                        'label': label,
+                        'crime': crime,
+                        'address': address,
+                        'date': date,
+                        'gender': gender,
+                        'image_url': image_url  # Add image URL here to display the image
+                    })
+                               
                     
                 if label:
                     flash(f'Match found! This is {label}', 'success')
+                    session['face_details'] = {
+                        'label': label,
+                        'crime': crime,
+                        'address': address,
+                        'date': date,
+                        'gender': gender,
+                        'image_url':image_url
+                    }
+
+                    # Pass face details to the template
+                    return redirect(url_for('main.criminalrecord', match=True))
+                    
                 else:
                     flash('No matching face found', 'info')
                 return redirect(url_for('main.verify_face'))
@@ -165,3 +193,10 @@ def stop_camera():
         camera.release()
         camera = None
     return '', 204
+
+@main.route('/crimial_record_details')
+@login_required
+def criminalrecord():
+    face_details = session.get('face_details')
+    if face_details:
+        return render_template('criminal_record_detail.html' , face_details=face_details, match=True)
